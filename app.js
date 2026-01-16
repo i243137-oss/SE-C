@@ -234,9 +234,9 @@ function matchesBatchColor(cellColor) {
     }
     
     // Default to 0 if not provided (Google Sheets API may omit 0 values)
-    const r = cellColor.red || 0;
-    const g = cellColor.green || 0;
-    const b = cellColor.blue || 0;
+    const r = cellColor.red ?? 0;
+    const g = cellColor.green ?? 0;
+    const b = cellColor.blue ?? 0;
     
     const target = CONFIG.BATCH_COLOR;
     const tolerance = CONFIG.COLOR_TOLERANCE;
