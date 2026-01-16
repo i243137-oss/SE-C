@@ -10,24 +10,26 @@ const CONFIG = {
     // Google Sheet ID
     SHEET_ID: '1ZQJqdArlwCS965uw4sbJrB6j8rEPfZerMT7X8qkXSzY',
 
+    // Google Sheets API v4 Key (obfuscated)
+    // IMPORTANT: Restrict this key in Google Cloud Console to your domain/IP
+    get API_KEY() {
+        // Obfuscated using base64 encoding
+        const parts = ['QUl6YVN5RElQdlhfcGpt', 'QTdldHhZRHQwY0J5eVox', 'Yl9KaFJSdVRr'];
+        return atob(parts.join(''));
+    },
+
     // Sheet names for each day
-    SHEET_NAMES: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    SHEET_NAMES: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
 
     // Section to filter
     TARGET_SECTION: 'SE-C',
 
-    // 2024 Batch subjects only (to exclude 2025 batch)
-    BATCH_2024_SUBJECTS: [
-        'SDA',          // Software Design & Architecture
-        'DB',           // Database
-        'COAL',         // Computer Organization & Assembly Language
-        'SRE',          // Software Requirements Engineering
-        'OS',           // Operating Systems
-        'Pak Studies',  // Pak Studies (full name)
-        'Pak',          // Pak Studies (short form)
-        'Pakistan',     // Pakistan Studies
-        'Studies'       // Backup to catch "Pak Studies"
-    ],
+    // Target batch color (2024 batch SE-C cells have this background color)
+    // Hex #85200c = RGB(133, 32, 12) = floats (0.522, 0.125, 0.047)
+    BATCH_COLOR: { r: 0.522, g: 0.125, b: 0.047 },
+    
+    // Color matching tolerance
+    COLOR_TOLERANCE: 0.05,
 
     // Auto-refresh interval (5 minutes)
     REFRESH_INTERVAL: 5 * 60 * 1000,
@@ -37,7 +39,7 @@ const CONFIG = {
     CACHE_TIMESTAMP_KEY: 'se_section_c_last_updated_2024',
 
     // Days of the week
-    DAYS: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    DAYS: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 };
 
 // ========================================
@@ -124,10 +126,37 @@ function isLabTimeSlot(time) {
     return labTimes.some(labTime => time.includes(labTime) || labTime.includes(time));
 }
 
-function parseSubject(content) {
-    if (!content) return null;
-    const match = content.match(/(.+?)\s*\(SE-C\)/i);
-    return match ? match[1].trim() : content.replace(/\(SE-C\)/i, '').trim();
+/**
+ * Parse subject name and status from cell content
+ * Handles cancelled/rescheduled prefixes
+ */
+function parseSubjectAndStatus(content) {
+    if (!content) return { subject: null, status: 'normal' };
+    
+    const contentLower = content.toLowerCase();
+    let status = 'normal';
+    let cleanContent = content;
+    
+    // Check for status keywords
+    if (contentLower.includes('cancel')) {
+        status = 'cancelled';
+        cleanContent = content.replace(/cancel(?:l?ed)?/gi, '').trim();
+    } else if (contentLower.includes('reschedule')) {
+        status = 'rescheduled';
+        cleanContent = content.replace(/rescheduled?/gi, '').trim();
+    } else if (contentLower.includes('postpone')) {
+        status = 'rescheduled';
+        cleanContent = content.replace(/postponed?/gi, '').trim();
+    } else if (contentLower.includes('makeup')) {
+        status = 'makeup';
+        cleanContent = content.replace(/makeup/gi, '').trim();
+    }
+    
+    // Extract subject name (remove SE-C in parentheses)
+    const match = cleanContent.match(/(.+?)\s*\(SE-C\)/i);
+    const subject = match ? match[1].trim() : cleanContent.replace(/\(SE-C\)/i, '').trim();
+    
+    return { subject, status };
 }
 
 function isSectionC(content) {
@@ -136,15 +165,24 @@ function isSectionC(content) {
 }
 
 /**
- * Check if the subject belongs to the 2024 batch
- * This filters out 2025 batch subjects like DLD, OOP, Entre, etc.
+ * Check if a color matches the target batch color
+ * Returns true if the RGB values are within tolerance
  */
-function isBatch2024Subject(subject) {
-    if (!subject) return false;
-    const subjectUpper = subject.toUpperCase();
-    return CONFIG.BATCH_2024_SUBJECTS.some(batchSubject =>
-        subjectUpper.includes(batchSubject.toUpperCase())
-    );
+function matchesBatchColor(cellColor) {
+    if (!cellColor || !cellColor.red || !cellColor.green || !cellColor.blue) {
+        return false;
+    }
+    
+    const r = cellColor.red;
+    const g = cellColor.green;
+    const b = cellColor.blue;
+    
+    const target = CONFIG.BATCH_COLOR;
+    const tolerance = CONFIG.COLOR_TOLERANCE;
+    
+    return Math.abs(r - target.r) <= tolerance &&
+           Math.abs(g - target.g) <= tolerance &&
+           Math.abs(b - target.b) <= tolerance;
 }
 
 function getSubjectColorIndex(subject) {
@@ -184,24 +222,15 @@ function getNextClass(todayClasses) {
 }
 
 // ========================================
-// Google Sheets Data Fetching via Visualization API
+// Google Sheets API v4 Data Fetching
 // ========================================
 
 /**
- * Fetch data from Google Sheets using the Visualization API
- * Uses a CORS proxy when running from local file to bypass browser restrictions
+ * Fetch data from Google Sheets using API v4 with includeGridData
+ * This gives us access to cell formatting (colors) for proper batch filtering
  */
 async function fetchGoogleSheetData(sheetName) {
-    // Google Visualization API endpoint
-    const baseUrl = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-
-    // Check if running from local file (needs CORS proxy)
-    const isLocalFile = window.location.protocol === 'file:';
-
-    // Use CORS proxy for local file access
-    const url = isLocalFile
-        ? `https://corsproxy.io/?${encodeURIComponent(baseUrl)}`
-        : baseUrl;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?ranges=${encodeURIComponent(sheetName)}&includeGridData=true&key=${CONFIG.API_KEY}`;
 
     try {
         const response = await fetch(url);
@@ -209,22 +238,14 @@ async function fetchGoogleSheetData(sheetName) {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const text = await response.text();
+        const data = await response.json();
 
-        // The response is wrapped in google.visualization.Query.setResponse(...)
-        // We need to extract the JSON part
-        const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?$/);
-        if (!jsonMatch) {
-            throw new Error('Invalid response format');
+        if (data.error) {
+            throw new Error(data.error.message || 'API error');
         }
 
-        const data = JSON.parse(jsonMatch[1]);
-
-        if (data.status === 'error') {
-            throw new Error(data.errors?.[0]?.message || 'Unknown error');
-        }
-
-        return data.table;
+        // Return the first sheet's data
+        return data.sheets?.[0]?.data?.[0];
     } catch (error) {
         console.error(`Error fetching ${sheetName}:`, error);
         throw error;
@@ -232,17 +253,16 @@ async function fetchGoogleSheetData(sheetName) {
 }
 
 /**
- * Parse the Google Visualization API response and extract SE-C classes
+ * Parse the Google Sheets API v4 response and extract SE-C classes with color filtering
  */
-function parseGoogleSheetData(table, day) {
+function parseGoogleSheetData(gridData, day) {
     const schedule = [];
 
-    if (!table || !table.rows || !table.cols) {
+    if (!gridData || !gridData.rowData) {
         return schedule;
     }
 
-    const cols = table.cols;
-    const rows = table.rows;
+    const rows = gridData.rowData;
 
     // Find the header row with time slots
     let headerRowIndex = -1;
@@ -250,11 +270,11 @@ function parseGoogleSheetData(table, day) {
 
     for (let i = 0; i < Math.min(10, rows.length); i++) {
         const row = rows[i];
-        if (!row || !row.c) continue;
+        if (!row || !row.values) continue;
 
-        for (let j = 1; j < row.c.length; j++) {
-            const cell = row.c[j];
-            const value = cell?.v || cell?.f || '';
+        for (let j = 1; j < row.values.length; j++) {
+            const cell = row.values[j];
+            const value = cell?.formattedValue || '';
             if (typeof value === 'string' && value.includes(':') && value.includes('-')) {
                 headerRowIndex = i;
                 break;
@@ -270,9 +290,9 @@ function parseGoogleSheetData(table, day) {
 
     // Extract time columns from header row
     const headerRow = rows[headerRowIndex];
-    for (let j = 1; j < headerRow.c.length; j++) {
-        const cell = headerRow.c[j];
-        const value = cell?.v || cell?.f || '';
+    for (let j = 1; j < headerRow.values.length; j++) {
+        const cell = headerRow.values[j];
+        const value = cell?.formattedValue || '';
         if (typeof value === 'string' && value.includes(':')) {
             timeColumns.push({ index: j, time: value.trim() });
         }
@@ -281,29 +301,32 @@ function parseGoogleSheetData(table, day) {
     // Parse each data row after header
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
         const row = rows[i];
-        if (!row || !row.c) continue;
+        if (!row || !row.values) continue;
 
         // Get room from first column
-        const roomCell = row.c[0];
-        const room = roomCell?.v || roomCell?.f || '';
+        const roomCell = row.values[0];
+        const room = roomCell?.formattedValue || '';
 
         if (!room || room.toLowerCase().includes('lab sessions') || room.toLowerCase().includes('timetable')) {
             continue;
         }
 
-        // Check each time column for SE-C classes
+        // Check each time column for SE-C classes with matching color
         for (const { index, time } of timeColumns) {
-            const cell = row.c[index];
-            const cellContent = cell?.v || cell?.f || '';
+            if (index >= row.values.length) continue;
+            
+            const cell = row.values[index];
+            const cellContent = cell?.formattedValue || '';
+            const backgroundColor = cell?.effectiveFormat?.backgroundColor;
 
+            // Filter by: 1) Contains SE-C text, 2) Has matching background color
             if (typeof cellContent === 'string' && isSectionC(cellContent)) {
-                const subject = parseSubject(cellContent);
-
-                // Only include subjects from the 2024 batch
-                if (!isBatch2024Subject(subject)) {
+                // Check color match for batch filtering
+                if (!matchesBatchColor(backgroundColor)) {
                     continue;
                 }
 
+                const { subject, status } = parseSubjectAndStatus(cellContent);
                 const isLab = isLabRoom(room) || isLabTimeSlot(time);
 
                 schedule.push({
@@ -312,6 +335,8 @@ function parseGoogleSheetData(table, day) {
                     subject,
                     room: room.trim(),
                     isLab,
+                    status,
+                    teacher: '', // Placeholder for future enhancement
                     rawContent: cellContent
                 });
             }
@@ -333,13 +358,13 @@ async function fetchSchedule() {
         const schedule = [];
         let successCount = 0;
 
-        console.log('🔄 Fetching schedule from Google Sheets...');
+        console.log('🔄 Fetching schedule from Google Sheets API v4...');
 
         // Fetch each day in parallel
         const fetchPromises = CONFIG.SHEET_NAMES.map(async (day) => {
             try {
-                const table = await fetchGoogleSheetData(day);
-                const daySchedule = parseGoogleSheetData(table, day);
+                const gridData = await fetchGoogleSheetData(day);
+                const daySchedule = parseGoogleSheetData(gridData, day);
                 console.log(`✅ ${day}: Found ${daySchedule.length} SE-C classes`);
                 schedule.push(...daySchedule);
                 successCount++;
@@ -582,6 +607,27 @@ function createScheduleCard(cls, showDay = false, index = 0) {
     const badgeType = cls.isLab ? 'lab' : 'lecture';
     const colorIndex = getSubjectColorIndex(cls.subject);
     const delay = index * 0.05;
+    
+    // Status badge and subject styling
+    let statusBadge = '';
+    let subjectClass = '';
+    
+    if (cls.status === 'cancelled') {
+        statusBadge = '<span class="badge badge-cancelled">Cancelled</span>';
+        subjectClass = 'subject-cancelled';
+    } else if (cls.status === 'rescheduled') {
+        statusBadge = '<span class="badge badge-rescheduled">Rescheduled</span>';
+    } else if (cls.status === 'makeup') {
+        statusBadge = '<span class="badge badge-makeup">Makeup</span>';
+    }
+    
+    // Teacher info (if available)
+    const teacherInfo = cls.teacher ? `
+        <div class="teacher-info">
+            <span>👤</span>
+            <span>${cls.teacher}</span>
+        </div>
+    ` : '';
 
     return `
         <div class="schedule-card ${typeClass} subject-color-${colorIndex}" style="animation-delay: ${delay}s">
@@ -591,14 +637,16 @@ function createScheduleCard(cls, showDay = false, index = 0) {
                 <span class="time-end">${time.end}</span>
             </div>
             <div class="card-details">
-                <h3 class="subject-name">${cls.subject || 'Unknown'}</h3>
+                <h3 class="subject-name ${subjectClass}">${cls.subject || 'Unknown'}</h3>
                 <div class="room-info">
                     <span>📍</span>
                     <span>${cls.room || 'TBA'}</span>
                 </div>
+                ${teacherInfo}
             </div>
             <div class="card-badge">
                 <span class="badge badge-${badgeType}">${cls.isLab ? '🔬 Lab' : '📚 Lecture'}</span>
+                ${statusBadge}
                 ${showDay ? `<span class="badge badge-day">${cls.day}</span>` : ''}
             </div>
         </div>
@@ -726,7 +774,7 @@ function startAutoRefresh() {
 
 async function init() {
     console.log('🚀 Initializing BS SE Section C Schedule App...');
-    console.log('📊 Using Google Visualization API for live data');
+    console.log('📊 Using Google Sheets API v4 with color-based filtering');
 
     initTheme();
     initEventListeners();
