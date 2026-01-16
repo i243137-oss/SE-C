@@ -92,6 +92,10 @@ const elements = {
 // Utility Functions
 // ========================================
 
+// Regex pattern for matching embedded time in cell text
+// Matches patterns like "09:30-11:15", "9:30-11:15", "09:30 - 11:15", "09:30–11:15"
+const EMBEDDED_TIME_PATTERN = /(\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2})/;
+
 function getCurrentDay() {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[new Date().getDay()];
@@ -127,11 +131,62 @@ function isLabTimeSlot(time) {
 }
 
 /**
+ * Extract embedded time from cell text
+ * Matches patterns like "09:30-11:15", "9:30-11:15", "09:30 - 11:15", "09:30–11:15"
+ * @param {string} cellText - Cell content to search for time
+ * @returns {string|null} Normalized time string "HH:MM-HH:MM" or null if not found
+ */
+function extractEmbeddedTime(cellText) {
+    if (!cellText) return null;
+    
+    const match = cellText.match(EMBEDDED_TIME_PATTERN);
+    
+    if (match) {
+        // Normalize: remove spaces and use standard hyphen
+        return match[1].replace(/\s+/g, '').replace('–', '-');
+    }
+    
+    return null;
+}
+
+/**
+ * Clean subject name by removing embedded time and section pattern
+ * @param {string} cellText - Original cell content
+ * @param {string|null} embeddedTime - Embedded time to remove (if present)
+ * @returns {string} Cleaned subject name
+ */
+function cleanSubjectName(cellText, embeddedTime) {
+    if (!cellText) return '';
+    
+    let subject = cellText;
+    
+    // Remove embedded time if present
+    if (embeddedTime) {
+        // Remove the original time pattern (may have spaces/en-dash)
+        subject = subject.replace(EMBEDDED_TIME_PATTERN, '');
+    }
+    
+    // Remove section pattern like (SE-C)
+    subject = subject.replace(/\(SE-C\)/gi, '');
+    
+    // Clean up extra spaces and trim
+    subject = subject.replace(/\s+/g, ' ').trim();
+    
+    return subject;
+}
+
+/**
  * Parse subject name and status from cell content
- * Handles cancelled/rescheduled prefixes
+ * Handles cancelled/rescheduled prefixes and embedded time
+ * @param {string} content - Cell content to parse
+ * @returns {{subject: string|null, status: string, embeddedTime: string|null}} 
+ *          Object containing:
+ *          - subject: Cleaned subject name (time and section removed)
+ *          - status: 'normal', 'cancelled', 'rescheduled', or 'makeup'
+ *          - embeddedTime: Extracted time in format "HH:MM-HH:MM" or null
  */
 function parseSubjectAndStatus(content) {
-    if (!content) return { subject: null, status: 'normal' };
+    if (!content) return { subject: null, status: 'normal', embeddedTime: null };
     
     const contentLower = content.toLowerCase();
     let status = 'normal';
@@ -152,11 +207,13 @@ function parseSubjectAndStatus(content) {
         cleanContent = content.replace(/makeup/gi, '').trim();
     }
     
-    // Extract subject name (remove SE-C in parentheses)
-    const match = cleanContent.match(/(.+?)\s*\(SE-C\)/i);
-    const subject = match ? match[1].trim() : cleanContent.replace(/\(SE-C\)/i, '').trim();
+    // Extract embedded time
+    const embeddedTime = extractEmbeddedTime(cleanContent);
     
-    return { subject, status };
+    // Clean subject name (remove embedded time and section pattern)
+    const subject = cleanSubjectName(cleanContent, embeddedTime);
+    
+    return { subject, status, embeddedTime };
 }
 
 function isSectionC(content) {
@@ -326,12 +383,16 @@ function parseGoogleSheetData(gridData, day) {
                     continue;
                 }
 
-                const { subject, status } = parseSubjectAndStatus(cellContent);
-                const isLab = isLabRoom(room) || isLabTimeSlot(time);
+                const { subject, status, embeddedTime } = parseSubjectAndStatus(cellContent);
+                
+                // Use embedded time if present, otherwise use column header time
+                const finalTime = embeddedTime || time;
+                
+                const isLab = isLabRoom(room) || isLabTimeSlot(finalTime);
 
                 schedule.push({
                     day,
-                    time,
+                    time: finalTime,
                     subject,
                     room: room.trim(),
                     isLab,
