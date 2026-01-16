@@ -639,6 +639,35 @@ body {
     color: var(--color-text-secondary);
 }
 
+.badge-cancelled {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.badge-rescheduled {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.badge-makeup {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.subject-cancelled {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+.teacher-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    margin-top: var(--spacing-xs);
+}
+
 /* No Classes */
 .no-classes, .no-results {
     text-align: center;
