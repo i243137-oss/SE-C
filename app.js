@@ -92,6 +92,10 @@ const elements = {
 // Utility Functions
 // ========================================
 
+// Regex pattern for matching embedded time in cell text
+// Matches patterns like "09:30-11:15", "9:30-11:15", "09:30 - 11:15", "09:30–11:15"
+const EMBEDDED_TIME_PATTERN = /(\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2})/;
+
 function getCurrentDay() {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[new Date().getDay()];
@@ -133,9 +137,7 @@ function isLabTimeSlot(time) {
 function extractEmbeddedTime(cellText) {
     if (!cellText) return null;
     
-    // Match time patterns with optional spaces and both hyphen types
-    const timePattern = /(\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2})/;
-    const match = cellText.match(timePattern);
+    const match = cellText.match(EMBEDDED_TIME_PATTERN);
     
     if (match) {
         // Normalize: remove spaces and use standard hyphen
@@ -156,7 +158,7 @@ function cleanSubjectName(cellText, embeddedTime) {
     // Remove embedded time if present
     if (embeddedTime) {
         // Remove the original time pattern (may have spaces/en-dash)
-        subject = subject.replace(/\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}/, '');
+        subject = subject.replace(EMBEDDED_TIME_PATTERN, '');
     }
     
     // Remove section pattern like (SE-C)
