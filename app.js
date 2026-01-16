@@ -133,6 +133,8 @@ function isLabTimeSlot(time) {
 /**
  * Extract embedded time from cell text
  * Matches patterns like "09:30-11:15", "9:30-11:15", "09:30 - 11:15", "09:30–11:15"
+ * @param {string} cellText - Cell content to search for time
+ * @returns {string|null} Normalized time string "HH:MM-HH:MM" or null if not found
  */
 function extractEmbeddedTime(cellText) {
     if (!cellText) return null;
@@ -149,6 +151,9 @@ function extractEmbeddedTime(cellText) {
 
 /**
  * Clean subject name by removing embedded time and section pattern
+ * @param {string} cellText - Original cell content
+ * @param {string|null} embeddedTime - Embedded time to remove (if present)
+ * @returns {string} Cleaned subject name
  */
 function cleanSubjectName(cellText, embeddedTime) {
     if (!cellText) return '';
@@ -173,6 +178,12 @@ function cleanSubjectName(cellText, embeddedTime) {
 /**
  * Parse subject name and status from cell content
  * Handles cancelled/rescheduled prefixes and embedded time
+ * @param {string} content - Cell content to parse
+ * @returns {{subject: string|null, status: string, embeddedTime: string|null}} 
+ *          Object containing:
+ *          - subject: Cleaned subject name (time and section removed)
+ *          - status: 'normal', 'cancelled', 'rescheduled', or 'makeup'
+ *          - embeddedTime: Extracted time in format "HH:MM-HH:MM" or null
  */
 function parseSubjectAndStatus(content) {
     if (!content) return { subject: null, status: 'normal', embeddedTime: null };
