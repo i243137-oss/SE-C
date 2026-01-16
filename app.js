@@ -226,13 +226,17 @@ function isSectionC(content) {
  * Returns true if the RGB values are within tolerance
  */
 function matchesBatchColor(cellColor) {
-    if (!cellColor || !cellColor.red || !cellColor.green || !cellColor.blue) {
+    if (!cellColor || 
+        cellColor.red === undefined || 
+        cellColor.green === undefined || 
+        cellColor.blue === undefined) {
         return false;
     }
     
-    const r = cellColor.red;
-    const g = cellColor.green;
-    const b = cellColor.blue;
+    // Default to 0 if not provided (Google Sheets API may omit 0 values)
+    const r = cellColor.red || 0;
+    const g = cellColor.green || 0;
+    const b = cellColor.blue || 0;
     
     const target = CONFIG.BATCH_COLOR;
     const tolerance = CONFIG.COLOR_TOLERANCE;
