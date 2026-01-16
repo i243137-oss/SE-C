@@ -140,7 +140,7 @@ function parseSubjectAndStatus(content) {
     // Check for status keywords
     if (contentLower.includes('cancel')) {
         status = 'cancelled';
-        cleanContent = content.replace(/cancel(?:l?ed)?/gi, '').trim();
+        cleanContent = content.replace(/cancell?ed/gi, '').trim();
     } else if (contentLower.includes('reschedule')) {
         status = 'rescheduled';
         cleanContent = content.replace(/rescheduled?/gi, '').trim();
