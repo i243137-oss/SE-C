@@ -127,11 +127,53 @@ function isLabTimeSlot(time) {
 }
 
 /**
+ * Extract embedded time from cell text
+ * Matches patterns like "09:30-11:15", "9:30-11:15", "09:30 - 11:15", "09:30–11:15"
+ */
+function extractEmbeddedTime(cellText) {
+    if (!cellText) return null;
+    
+    // Match time patterns with optional spaces and both hyphen types
+    const timePattern = /(\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2})/;
+    const match = cellText.match(timePattern);
+    
+    if (match) {
+        // Normalize: remove spaces and use standard hyphen
+        return match[1].replace(/\s+/g, '').replace('–', '-');
+    }
+    
+    return null;
+}
+
+/**
+ * Clean subject name by removing embedded time and section pattern
+ */
+function cleanSubjectName(cellText, embeddedTime) {
+    if (!cellText) return '';
+    
+    let subject = cellText;
+    
+    // Remove embedded time if present
+    if (embeddedTime) {
+        // Remove the original time pattern (may have spaces/en-dash)
+        subject = subject.replace(/\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}/, '');
+    }
+    
+    // Remove section pattern like (SE-C)
+    subject = subject.replace(/\(SE-C\)/gi, '');
+    
+    // Clean up extra spaces and trim
+    subject = subject.replace(/\s+/g, ' ').trim();
+    
+    return subject;
+}
+
+/**
  * Parse subject name and status from cell content
- * Handles cancelled/rescheduled prefixes
+ * Handles cancelled/rescheduled prefixes and embedded time
  */
 function parseSubjectAndStatus(content) {
-    if (!content) return { subject: null, status: 'normal' };
+    if (!content) return { subject: null, status: 'normal', embeddedTime: null };
     
     const contentLower = content.toLowerCase();
     let status = 'normal';
@@ -152,11 +194,13 @@ function parseSubjectAndStatus(content) {
         cleanContent = content.replace(/makeup/gi, '').trim();
     }
     
-    // Extract subject name (remove SE-C in parentheses)
-    const match = cleanContent.match(/(.+?)\s*\(SE-C\)/i);
-    const subject = match ? match[1].trim() : cleanContent.replace(/\(SE-C\)/i, '').trim();
+    // Extract embedded time
+    const embeddedTime = extractEmbeddedTime(cleanContent);
     
-    return { subject, status };
+    // Clean subject name (remove embedded time and section pattern)
+    const subject = cleanSubjectName(cleanContent, embeddedTime);
+    
+    return { subject, status, embeddedTime };
 }
 
 function isSectionC(content) {
@@ -326,12 +370,16 @@ function parseGoogleSheetData(gridData, day) {
                     continue;
                 }
 
-                const { subject, status } = parseSubjectAndStatus(cellContent);
-                const isLab = isLabRoom(room) || isLabTimeSlot(time);
+                const { subject, status, embeddedTime } = parseSubjectAndStatus(cellContent);
+                
+                // Use embedded time if present, otherwise use column header time
+                const finalTime = embeddedTime || time;
+                
+                const isLab = isLabRoom(room) || isLabTimeSlot(finalTime);
 
                 schedule.push({
                     day,
-                    time,
+                    time: finalTime,
                     subject,
                     room: room.trim(),
                     isLab,
