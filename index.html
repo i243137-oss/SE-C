@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BS SE Section C - Class Schedule | Spring 2026</title>
+    <meta name="description" content="Class schedule for BS Software Engineering 2024 batch, Section C - Spring 2026 semester">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="brand">
+                    <div class="logo">
+                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="40" height="40" rx="10" fill="url(#logo-gradient)"/>
+                            <path d="M12 14h16M12 20h16M12 26h10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                            <defs>
+                                <linearGradient id="logo-gradient" x1="0" y1="0" x2="40" y2="40">
+                                    <stop offset="0%" stop-color="#6366f1"/>
+                                    <stop offset="100%" stop-color="#8b5cf6"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <h1>Section C Schedule</h1>
+                        <p class="subtitle">BS Software Engineering • Spring 2026</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <div class="last-updated" id="lastUpdated">
+                        <span class="update-icon">🔄</span>
+                        <span class="update-text">Loading...</span>
+                    </div>
+                    <button class="btn-icon theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                        <span class="theme-icon-light">☀️</span>
+                        <span class="theme-icon-dark">🌙</span>
+                    </button>
+                    <button class="btn-icon refresh-btn" id="refreshBtn" aria-label="Refresh data">
+                        <span>🔄</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="nav-container">
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-view="today">
+                    <span class="tab-icon">📅</span>
+                    <span class="tab-text">Today</span>
+                </button>
+                <button class="nav-tab" data-view="week">
+                    <span class="tab-icon">📆</span>
+                    <span class="tab-text">Full Week</span>
+                </button>
+            </div>
+            <div class="day-filters" id="dayFilters">
+                <button class="day-btn active" data-day="all">All Days</button>
+                <button class="day-btn" data-day="Monday">Mon</button>
+                <button class="day-btn" data-day="Tuesday">Tue</button>
+                <button class="day-btn" data-day="Wednesday">Wed</button>
+                <button class="day-btn" data-day="Thursday">Thu</button>
+                <button class="day-btn" data-day="Friday">Fri</button>
+            </div>
+        </nav>
+
+        <!-- Search -->
+        <div class="search-container">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Search by subject name..." autocomplete="off">
+                <button class="clear-search" id="clearSearch" aria-label="Clear search">✕</button>
+            </div>
+        </div>
+
+        <!-- Today's Info Card -->
+        <div class="today-info" id="todayInfo">
+            <div class="today-card">
+                <div class="today-date">
+                    <span class="day-name" id="currentDayName">Loading...</span>
+                    <span class="full-date" id="currentFullDate"></span>
+                </div>
+                <div class="next-class" id="nextClassInfo">
+                    <span class="next-label">Next Class</span>
+                    <span class="next-subject">--</span>
+                    <span class="next-time">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Loading State -->
+            <div class="loading-state" id="loadingState">
+                <div class="loader">
+                    <div class="loader-spinner"></div>
+                    <p>Fetching schedule...</p>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div class="error-state hidden" id="errorState">
+                <div class="error-content">
+                    <span class="error-icon">⚠️</span>
+                    <h2>Unable to Load Schedule</h2>
+                    <p id="errorMessage">Please check your internet connection and try again.</p>
+                    <button class="btn-primary" id="retryBtn">Try Again</button>
+                </div>
+            </div>
+
+            <!-- Schedule Content -->
+            <div class="schedule-content hidden" id="scheduleContent">
+                <!-- Today View -->
+                <div class="view-today" id="viewToday">
+                    <div class="schedule-cards" id="todayCards">
+                        <!-- Cards will be populated by JavaScript -->
+                    </div>
+                    <div class="no-classes hidden" id="noClassesToday">
+                        <span class="no-classes-icon">🎉</span>
+                        <h3>No Classes Today!</h3>
+                        <p>Enjoy your day off or check other days.</p>
+                    </div>
+                </div>
+
+                <!-- Week View -->
+                <div class="view-week hidden" id="viewWeek">
+                    <div class="timetable-wrapper">
+                        <table class="timetable" id="weekTable">
+                            <thead>
+                                <tr>
+                                    <th class="time-col">Time</th>
+                                    <th>Monday</th>
+                                    <th>Tuesday</th>
+                                    <th>Wednesday</th>
+                                    <th>Thursday</th>
+                                    <th>Friday</th>
+                                </tr>
+                            </thead>
+                            <tbody id="weekTableBody">
+                                <!-- Rows will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Filtered View -->
+                <div class="view-filtered hidden" id="viewFiltered">
+                    <div class="schedule-cards" id="filteredCards">
+                        <!-- Cards will be populated by JavaScript -->
+                    </div>
+                    <div class="no-results hidden" id="noResults">
+                        <span class="no-results-icon">🔍</span>
+                        <h3>No Results Found</h3>
+                        <p>Try a different search term or filter.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Legend -->
+        <div class="legend-container">
+            <div class="legend">
+                <div class="legend-item">
+                    <span class="legend-color lecture"></span>
+                    <span>Lecture</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color lab"></span>
+                    <span>Lab</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Data sourced from <a href="https://docs.google.com/spreadsheets/d/1ZQJqdArlwCS965uw4sbJrB6j8rEPfZerMT7X8qkXSzY/edit?gid=1622709969" target="_blank" rel="noopener">FSC TimeTable Spring 2026</a></p>
+            <p class="footer-note">Auto-refreshes every 5 minutes • Only showing Section C classes</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
